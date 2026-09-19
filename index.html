@@ -74,6 +74,7 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);ga
   </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="demo-bundle.js" onerror="void 0"></script>
 <script>
 (function(){
 const $=s=>document.querySelector(s);
@@ -81,12 +82,14 @@ const st={owner:null,repo:null,token:'',commits:[],i:0,cache:new Map(),left:'STA
 try{$('#token').value=localStorage.getItem('lt_token')||'';$('#repo').value=localStorage.getItem('lt_repo')||''}catch(e){}
 $('#theme').onclick=()=>{const r=document.documentElement;const cur=r.getAttribute('data-theme');const next=cur==='dark'?'light':'dark';r.setAttribute('data-theme',next)};
 function hdr(){const h={'Accept':'application/vnd.github+json'};if(st.token)h['Authorization']='Bearer '+st.token;return h}
-async function api(path){const r=await fetch('https://api.github.com'+path,{headers:hdr()});if(!r.ok){const t=await r.text();throw new Error(r.status+' '+path+(r.status===403?' — rate limit; add a token':'')+(r.status===404?' — not found (private? add a token)':''))}return r.json()}
-async function file(path,sha){const k=sha+':'+path;if(st.cache.has(k))return st.cache.get(k);
+const DEMO=window.LT_DEMO||null;
+async function api(path){if(DEMO){const m=path.match(/^\/repos\/[^\/]+\/[^\/]+$/);if(m)return{default_branch:'main'};const c=path.match(/\/commits\?path=STATE\.md/);if(c)return DEMO.commits.slice().reverse().map(x=>({sha:x.sha,commit:{author:{date:x.date},message:x.msg}}));throw new Error('demo: '+path)}
+const r=await fetch('https://api.github.com'+path,{headers:hdr()});if(!r.ok){const t=await r.text();throw new Error(r.status+' '+path+(r.status===403?' — rate limit; add a token':'')+(r.status===404?' — not found (private? add a token)':''))}return r.json()}
+async function file(path,sha){if(DEMO){const f=DEMO.files[sha]||{};return f[path]===undefined?null:f[path]}const k=sha+':'+path;if(st.cache.has(k))return st.cache.get(k);
   let txt=null;try{const j=await api(`/repos/${st.owner}/${st.repo}/contents/${encodeURIComponent(path).replace(/%2F/g,'/')}?ref=${sha}`);if(j.encoding==='base64')txt=new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\n/g,'')),c=>c.charCodeAt(0)))}catch(e){txt=null}
   st.cache.set(k,txt);return txt}
-async function listDir(path,sha){try{const j=await api(`/repos/${st.owner}/${st.repo}/contents/${path}?ref=${sha}`);return Array.isArray(j)?j:[]}catch(e){return []}}
-function imgUrl(rel,sha,base){const p=new URL(rel,'https://x/'+base).pathname.slice(1);
+async function listDir(path,sha){if(DEMO){return ((DEMO.dirs[sha]||{})[path]||[]).map(n=>({name:n}))}try{const j=await api(`/repos/${st.owner}/${st.repo}/contents/${path}?ref=${sha}`);return Array.isArray(j)?j:[]}catch(e){return []}}
+function imgUrl(rel,sha,base){const p=new URL(rel,'https://x/'+base).pathname.slice(1);if(DEMO)return DEMO.images[p]||p;
   if(st.token){return null}return `https://raw.githubusercontent.com/${st.owner}/${st.repo}/${sha}/${p}`}
 async function privImg(rel,sha,base){const p=new URL(rel,'https://x/'+base).pathname.slice(1);const r=await fetch(`https://api.github.com/repos/${st.owner}/${st.repo}/contents/${p}?ref=${sha}`,{headers:Object.assign(hdr(),{'Accept':'application/vnd.github.raw'})});if(!r.ok)throw new Error(r.status);return URL.createObjectURL(await r.blob())}
 function render(el,md,sha,base){
@@ -127,7 +130,8 @@ async function load(){const v=$('#repo').value.trim().replace(/^https?:\/\/githu
     const want=(location.hash.match(/@([0-9a-f]{7})/)||[])[1];const idx=want?st.commits.findIndex(c=>c.sha.startsWith(want)):-1;await go(idx>=0?idx:st.commits.length-1)}
   catch(e){$('#status').textContent='Error: '+e.message}}
 $('#load').onclick=load;$('#repo').addEventListener('keydown',e=>{if(e.key==='Enter')load()});
-const h=location.hash.replace(/^#/,'');if(h){const m=h.match(/^([^\/@]+\/[^\/@]+)/);if(m){$('#repo').value=m[1];load()}}
+if(DEMO){$('#repo').value=DEMO.repo;$('#token').disabled=true;$('#status').textContent='Demo bundle: '+DEMO.repo;load()}
+const h=location.hash.replace(/^#/,'');if(!DEMO&&h){const m=h.match(/^([^\/@]+\/[^\/@]+)/);if(m){$('#repo').value=m[1];load()}}
 })();
 </script>
 </body>
