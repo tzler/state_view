@@ -88,18 +88,14 @@ async function file(path,sha){const k=sha+':'+path;if(st.cache.has(k))return st.
 async function listDir(path,sha){try{const j=await api(`/repos/${st.owner}/${st.repo}/contents/${path}?ref=${sha}`);return Array.isArray(j)?j:[]}catch(e){return []}}
 function imgUrl(rel,sha,base){const p=new URL(rel,'https://x/'+base).pathname.slice(1);
   if(st.token){return null}return `https://raw.githubusercontent.com/${st.owner}/${st.repo}/${sha}/${p}`}
-async function privImg(rel,sha,base){const p=new URL(rel,'https://x/'+base).pathname.slice(1);const j=await api(`/repos/${st.owner}/${st.repo}/contents/${p}?ref=${sha}`);return 'data:image/png;base64,'+j.content.replace(/\n/g,'')}
+async function privImg(rel,sha,base){const p=new URL(rel,'https://x/'+base).pathname.slice(1);const r=await fetch(`https://api.github.com/repos/${st.owner}/${st.repo}/contents/${p}?ref=${sha}`,{headers:Object.assign(hdr(),{'Accept':'application/vnd.github.raw'})});if(!r.ok)throw new Error(r.status);return URL.createObjectURL(await r.blob())}
 function render(el,md,sha,base){
   if(md==null){el.innerHTML='<p class="empty">— not present at this commit —</p>';return}
-  md=md.replace(/^<a id="(D\d+)"><\/a>\n## /gm,(m,id)=>`<a id="${id}"></a>\n## `);
-  let html=marked.parse(md,{gfm:true,breaks:false});
-  const tmp=document.createElement('div');tmp.innerHTML=html;
-  // wrap reasoning entries
-  tmp.querySelectorAll('a[id^="D"]').forEach(a=>{const h=a.nextElementSibling;if(!h||h.tagName!=='H2')return;const box=document.createElement('div');box.className='entry';box.id='e-'+a.id;let n=h;const parts=[];while(n&&!(n.tagName==='A'&&/^D\d+$/.test(n.id))){parts.push(n);n=n.nextElementSibling}
-    a.after(box);parts.forEach(x=>box.appendChild(x))});
-  // images
+  const tmp=document.createElement('div');
+  const parts=md.split(/^<a id="(D\d+)"><\/a>\n/m);           // [preamble, id, body, id, body, ...]
+  tmp.innerHTML=marked.parse(parts[0],{gfm:true});
+  for(let i=1;i<parts.length;i+=2){const box=document.createElement('div');box.className='entry';box.id='e-'+parts[i];box.innerHTML=marked.parse(parts[i+1],{gfm:true});tmp.appendChild(box)}
   tmp.querySelectorAll('img').forEach(async im=>{const src=im.getAttribute('src');if(/^https?:/.test(src))return;const u=imgUrl(src,sha,base);if(u){im.src=u}else{try{im.src=await privImg(src,sha,base)}catch(e){im.alt='(image unavailable)'}}});
-  // links
   tmp.querySelectorAll('a[href]').forEach(a=>{const h=a.getAttribute('href');if(/^https?:/.test(h)){a.target='_blank';return}
     const m=h.match(/^(?:\.\.\/)?(REASONING\.md)?#(D\d+)$/);if(m){a.onclick=e=>{e.preventDefault();showRight('REASONING.md').then(()=>{const t=document.getElementById('e-'+m[2]);if(t){t.scrollIntoView({behavior:'smooth',block:'start'});t.classList.add('flash');setTimeout(()=>t.classList.remove('flash'),1600)}})};return}
     if(/\.md(#.*)?$/.test(h)){a.onclick=e=>{e.preventDefault();const p=new URL(h,'https://x/'+base).pathname.slice(1);showLeft(p)};return}
