@@ -1,6 +1,6 @@
 # lab-trace viewer
 
-A single static page that walks a project kept the [lab-trace](https://github.com/tzler/lab-trace) way.
+A single static page that walks a project kept the [lab-trace](https://github.com/tzler/state) way.
 Paste a GitHub repository; every commit that changed `STATE.md` becomes a point on a timeline; step with ← →
 and read what the project believed at that moment (left) and why (right, `REASONING.md`, newest first),
 with the figures as they were at that commit. `[Dxx]` links jump to the entry. Tabs show `RESOURCES.md`,
