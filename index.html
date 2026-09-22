@@ -74,6 +74,46 @@ main{flex:1;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);ga
   </section>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script>
+// Minimal markdown fallback: used only if the CDN copy of `marked` is unavailable
+// (offline, blocked, or a strict sandbox). Covers what the trace files use.
+if (typeof marked === 'undefined') {
+  window.marked = { parse: function (md) {
+    const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const inline = t => esc(t)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, '<img alt="$1" src="$2">')
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2">$1</a>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+    const out = []; let list = null, table = null;
+    const closeList = () => { if (list) { out.push('</' + list + '>'); list = null; } };
+    const closeTable = () => { if (table) { out.push('</table>'); table = null; } };
+    for (const raw of md.split('\n')) {
+      const line = raw.replace(/\s+$/, '');
+      if (/^\s*$/.test(line)) { closeList(); closeTable(); continue; }
+      const h = line.match(/^(#{1,6})\s+(.*)$/);
+      if (h) { closeList(); closeTable(); out.push('<h' + h[1].length + '>' + inline(h[2]) + '</h' + h[1].length + '>'); continue; }
+      if (/^\|/.test(line)) {
+        if (/^\|[\s:|-]+\|?\s*$/.test(line)) continue;             // separator row
+        const cells = line.replace(/^\||\|$/g, '').split('|');
+        if (!table) { out.push('<table>'); table = true; }
+        out.push('<tr>' + cells.map(c => '<td>' + inline(c.trim()) + '</td>').join('') + '</tr>');
+        continue;
+      }
+      closeTable();
+      const li = line.match(/^\s*([-*]|\d+\.)\s+(.*)$/);
+      if (li) { const want = /\d/.test(li[1]) ? 'ol' : 'ul';
+        if (list !== want) { closeList(); out.push('<' + want + '>'); list = want; }
+        out.push('<li>' + inline(li[2].replace(/^\[[ x]\]\s*/, '')) + '</li>'); continue; }
+      closeList();
+      out.push('<p>' + inline(line) + '</p>');
+    }
+    closeList(); closeTable();
+    return out.join('\n');
+  } };
+}
+</script>
 <script src="demo-bundle.js" onerror="void 0"></script>
 <script>
 (function(){
@@ -83,7 +123,7 @@ try{$('#token').value=localStorage.getItem('lt_token')||'';$('#repo').value=loca
 $('#theme').onclick=()=>{const r=document.documentElement;const cur=r.getAttribute('data-theme');const next=cur==='dark'?'light':'dark';r.setAttribute('data-theme',next)};
 function hdr(){const h={'Accept':'application/vnd.github+json'};if(st.token)h['Authorization']='Bearer '+st.token;return h}
 const DEMO=window.LT_DEMO||null;
-async function api(path){if(DEMO){const m=path.match(/^\/repos\/[^\/]+\/[^\/]+$/);if(m)return{default_branch:'main'};const c=path.match(/\/commits\?path=STATE\.md/);if(c)return DEMO.commits.slice().reverse().map(x=>({sha:x.sha,commit:{author:{date:x.date},message:x.msg}}));throw new Error('demo: '+path)}
+async function api(path){if(DEMO){const m=path.match(/^\/repos\/[^\/]+\/[^\/]+$/);if(m)return{default_branch:'main'};const c=path.match(/\/commits\?path=STATE\.md/);if(c)return DEMO.commits.slice().map(x=>({sha:x.sha,commit:{author:{date:x.date},message:x.msg}}));throw new Error('demo: '+path)}
 const r=await fetch('https://api.github.com'+path,{headers:hdr()});if(!r.ok){const t=await r.text();throw new Error(r.status+' '+path+(r.status===403?' — rate limit; add a token':'')+(r.status===404?' — not found (private? add a token)':''))}return r.json()}
 async function file(path,sha){if(DEMO){const f=DEMO.files[sha]||{};return f[path]===undefined?null:f[path]}const k=sha+':'+path;if(st.cache.has(k))return st.cache.get(k);
   let txt=null;try{const j=await api(`/repos/${st.owner}/${st.repo}/contents/${encodeURIComponent(path).replace(/%2F/g,'/')}?ref=${sha}`);if(j.encoding==='base64')txt=new TextDecoder().decode(Uint8Array.from(atob(j.content.replace(/\n/g,'')),c=>c.charCodeAt(0)))}catch(e){txt=null}
